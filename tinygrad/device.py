@@ -90,6 +90,10 @@ class Buffer:
     return ret
 
 def _internal_buffer_copy(dest, src):
+  if (hasattr(dest.allocator, 'from_disk') and src.device.startswith("DISK:")):
+    # fast path, used by METAL for MTLIOCommandBuffer::loadBuffer
+    dest.allocator.from_disk(dest._buf, src._buf, dest.size*dest.dtype.itemsize, path=src.device.replace("DISK:", "", 1))
+    return
   if hasattr(dest.allocator, 'transfer') and type(dest.allocator) is type(src.allocator):
     # fast path, used on HIP between GPUs
     # NOTE: it's important we use the dest device here to ensure the transfer is ready

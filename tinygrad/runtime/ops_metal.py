@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os, subprocess, pathlib, ctypes, tempfile, functools
-import Metal, libdispatch
+import Metal, libdispatch, Foundation
 from typing import List, Any, Tuple, Optional
 from tinygrad.codegen.kernel import LinearizerOptions
 from tinygrad.helpers import prod, getenv, DEBUG, diskcache, unwrap2
@@ -61,6 +61,13 @@ class MetalAllocator(LRUAllocator):
     encoder.endEncoding()
     command_buffer.commit()
     self.device.mtl_buffers_in_flight.append(command_buffer)
+  def from_disk(self, dest:Any, src:Any, sz:int, path:Any):
+    io_command_buffer = self.device.mtl_io_queue.commandBuffer()
+    file_handle = self.device.device.newIOFileHandleWithURL_error_(Foundation.NSURL.fileURLWithPath_(path), None)
+    if isinstance(file_handle, tuple): file_handle = unwrap2(file_handle)
+    io_command_buffer.loadBuffer_offset_size_sourceHandle_sourceHandleOffset_(dest, 0, sz, file_handle, src.offset)
+    io_command_buffer.commit()
+    self.device.mtl_buffers_in_flight.append(io_command_buffer)
   def from_buffer(self, src:memoryview) -> Optional[Any]:
     ret = self.device.device.newBufferWithBytesNoCopy_length_options_deallocator_(src, len(src), Metal.MTLResourceStorageModeShared, None)
     if ret: self.device.mv_in_metal.append(src)
@@ -78,6 +85,11 @@ class MetalDevice(Compiled):
     self.device = Metal.MTLCreateSystemDefaultDevice()
     if MetalDevice.compiler_device is None: MetalDevice.compiler_device = self.device
     self.mtl_queue = self.device.newCommandQueueWithMaxCommandBufferCount_(1024)
+    mtl_io_queue_desc = Metal.MTLIOCommandQueueDescriptor.alloc().init()
+    mtl_io_queue_desc.setType_(Metal.MTLIOCommandQueueTypeSerial)
+    mtl_io_queue_desc.setPriority_(Metal.MTLIOPriorityHigh)
+    #mtl_io_queue_desc.setMaxCommandBufferCount_(1024)
+    self.mtl_io_queue = unwrap2(self.device.newIOCommandQueueWithDescriptor_error_(mtl_io_queue_desc, None))
     self.mtl_buffers_in_flight: List[Any] = []
     self.mv_in_metal: List[memoryview] = []
     from tinygrad.features.graph.metal import MetalGraph
