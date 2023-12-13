@@ -63,8 +63,7 @@ class MetalAllocator(LRUAllocator):
     self.device.mtl_buffers_in_flight.append(command_buffer)
   def from_disk(self, dest:Any, src:Any, sz:int, path:Any):
     io_command_buffer = self.device.mtl_io_queue.commandBuffer()
-    file_handle = self.device.device.newIOFileHandleWithURL_error_(Foundation.NSURL.fileURLWithPath_(path), None)
-    if isinstance(file_handle, tuple): file_handle = unwrap2(file_handle)
+    file_handle = unwrap2(self.device.device.newIOFileHandleWithURL_error_(Foundation.NSURL.fileURLWithPath_(path), None))
     io_command_buffer.loadBuffer_offset_size_sourceHandle_sourceHandleOffset_(dest, 0, sz, file_handle, src.offset)
     io_command_buffer.commit()
     self.device.mtl_buffers_in_flight.append(io_command_buffer)
